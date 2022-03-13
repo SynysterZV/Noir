@@ -4,6 +4,8 @@ services:
     container_name: app
     stdin_open: true
     tty: true
+    depends_on:
+      - postgres
   postgres:
     image: postgres
     container_name: postgres

@@ -6,6 +6,9 @@
   "scripts": {
     "start": "env-cmd node .",
     "start:set": "env-cmd node . --set",
+    "start:prod": "prisma generate && env-cmd -f .env.prod node .",
+    "migrate": "prisma migrate dev --name pg",
+    "start:migrate:prod": "env-cmd -f .env.prod prisma migrate deploy && npm run build && npm run start:prod",
     "build": "rimraf dist && tsc"
   },
   "dependencies": {

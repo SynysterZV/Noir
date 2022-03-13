@@ -7,7 +7,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url = "postgresql://postgres:prisma@localhost:5432/noir?schema=public"
+  url = env("DATABASE_URL")
 }
 
 model Tag {
