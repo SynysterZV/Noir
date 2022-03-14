@@ -1,14 +1,17 @@
 import { Client, Collection } from "discord.js";
 import prisma from "@prisma/client";
-import { join } from "path"
-import glob from "glob"
+import { loadFiles } from "./util.js";
+import { guildIds } from "./constants.js";
 
 import type { Command } from "./types/Command"
+import type { CustomModal } from "./types/Modal"
 
 declare module "discord.js" {
     interface Client {
         commands: Collection<string, Command>
+        modals: Collection<string, CustomModal>
         db: prisma.PrismaClient
+        mdnCache: Array<{ title: string, url: string }>
     }
 }
 
@@ -17,76 +20,44 @@ class NoirClient extends Client {
         super({ intents: ["Guilds"] })
 
         this.commands = new Collection<string, Command>()
+        this.modals = new Collection<string, CustomModal>()
         this.db = new prisma.PrismaClient()
     }
     
     loadCommands() {
-        glob.sync(join("dist", "commands", "**", "*.js"), { absolute: true })
-            .forEach(file => {
-                import(file).then(({ command }: { command: Command }) => {
-                    if(this.commands.get(command.data.name)) {
-                        throw new Error(`Duplicate command: ${command.data.name}`)
-                    }
 
-                    this.commands.set(command.data.name, command)
-                })
-            })
+        loadFiles("commands", ({ command }: { command: Command }) => {
+            if(this.commands.get(command.data.name)) {
+                throw new Error(`Duplicate command: ${command.data.name}`)
+            }
+
+            this.commands.set(command.data.name, command)
+        })
+
+        loadFiles("modals", ({ modal }) => {
+            if(this.modals.get(modal.name)) {
+                throw new Error(`Duplicate modal: ${modal.name}`)
+            }
+
+            this.modals.set(modal.name, modal)
+        })
 
         if(process.argv.slice(2).includes("--set")) {
             this.on("ready", async c => {
                 const cmds = this.commands.map(x => x.data)
-                const guild = c.guilds.cache.get("951313412682575943")
-                if(!guild) return
+                const guilds = guildIds.map(x => this.guilds.cache.get(x)).filter(x=>x)
 
-                await guild.commands.set(cmds)
+                guilds.forEach(async guild => {
+                    await guild?.commands.set(cmds)
+                })
             })
         }
-
-        this.on("interactionCreate", async int => {
-            if(int.isChatInputCommand()) {
-                const cmd = this.commands.get(int.commandName)
-                if(!cmd) return
-
-                cmd.exec(int)
-            }
-
-            if(int.isAutocomplete()) {
-                if(int.commandName == "tag") {
-                    const tags = await int.client.db.tag.findMany({
-                        where: {
-                            key: { contains: String(int.options.getFocused()) }
-                        }
-                    })
-
-                    int.respond(
-                        tags.map(({ key }: { key: string }) => ({ name: key, value: key })).slice(0,25)
-                    )
-                }
-            }
-
-            if(int.isModalSubmit()) {
-                if(int.customId == "tag") {
-                    await this.db.tag.create({
-                        data: {
-                            authorId: int.user.id,
-                            key: int.components[0].components[0].value,
-                            value: int.components[1].components[0].value
-                        }
-                    }).then(() => {
-                        int.reply({ content: "Tag successfully created", ephemeral: true })
-                    }).catch(() => int.reply({ content: "Duplicate tag", ephemeral: true }))
-                }
-            }
-        })
     }
 
     loadEvents() {
-        glob.sync(join("dist", "events", "**", "*.js"), { absolute: true })
-            .forEach(file => {
-                import(file).then(({ event }) => {
-                    this.on(event.name, event.exec)
-                })
-            })
+        loadFiles("events", ({ event }) => {
+            this.on(event.name, event.exec)
+        })
     }
 
     init() {
