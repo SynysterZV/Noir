@@ -8,6 +8,8 @@ export const event: Event = {
         //@ts-ignore
         client.mdnCache = await fetch("https://developer.mozilla.org/en-US/search-index.json").then(res => res.json())
 
+        client.manager.init(client.user.id)
+
         console.log(`Ready! Logged in as ${client.user.tag}`)
     }
 }

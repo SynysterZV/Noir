@@ -48,7 +48,7 @@ export const command: Command = {
     },
 
     autocomplete(int) {
-        const terms = int.client.mdnCache.filter(x => x.title.includes(String(int.options.getFocused()))).slice(0,25)
+        const terms = int.client.mdnCache.filter(x => x.title.toLowerCase().includes(String(int.options.getFocused()).toLowerCase()) && x.url.length < 100).slice(0,24)
 
         int.respond(
             terms.map(x => ({ name: x.title, value: x.url }))

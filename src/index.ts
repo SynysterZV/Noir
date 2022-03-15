@@ -1,5 +1,6 @@
 import { Client, Collection } from "discord.js";
 import prisma from "@prisma/client";
+import { Manager } from "erela.js";
 import { loadFiles } from "./util.js";
 import { guildIds } from "./constants.js";
 
@@ -12,16 +13,38 @@ declare module "discord.js" {
         modals: Collection<string, CustomModal>
         db: prisma.PrismaClient
         mdnCache: Array<{ title: string, url: string }>
+        manager: Manager
     }
 }
 
 class NoirClient extends Client {
     constructor() {
-        super({ intents: ["Guilds"] })
+        super({ intents: ["Guilds", "GuildVoiceStates"] })
 
         this.commands = new Collection<string, Command>()
         this.modals = new Collection<string, CustomModal>()
         this.db = new prisma.PrismaClient()
+
+        this.manager = new Manager({
+            nodes: [
+                {
+                    host: process.env["LAVALINK_NODE"] || "localhost",
+                    password: "youshallnotpass",
+                    port: 2333
+                }
+            ],
+
+            send: (id, payload) => {
+                const guild = this.guilds.cache.get(id)
+                if (guild) guild.shard.send(payload);
+            }
+        })
+
+        this.manager
+            .on("nodeConnect", node => console.log(`Node "${node.options.identifier}" connected`))
+            .on("nodeError", (node, error) => console.log(`Node "${node.options.identifier}" encountered an error: ${error.message}`))
+
+        this.on("raw", d => this.manager.updateVoiceState(d))
     }
     
     loadCommands() {
